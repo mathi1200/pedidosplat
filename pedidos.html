@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema Completo de Gestão de Pedidos</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --background-color: #f5f5f5;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 20px;
+            background-color: var(--background-color);
+        }
+
+        .container {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: 300px 1fr;
+        }
+
+        .selecao {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .conteudo {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .abas {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .aba {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            background: #eee;
+            transition: all 0.3s;
+        }
+
+        .aba.ativa {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .formulario {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        button.secondary {
+            background-color: var(--secondary-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .numeracao-input {
+            width: 70px;
+            padding: 6px;
+            text-align: center;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .pendente { background: #ffeb3b; color: #000; }
+        .entregue { background: #4CAF50; color: #fff; }
+        
+        .error-message {
+            color: red;
+            margin: 10px 0;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            padding: 20px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="selecao">
+            <h2>Seleção</h2>
+            <select id="selecionarLoja" onchange="carregarPedidos()">
+                <option value="">Selecione uma loja</option>
+            </select>
+            
+            <select id="selecionarPedido" onchange="mudarAba('detalhes')" style="margin-top: 20px;">
+                <option value="">Selecione um pedido</option>
+            </select>
+        </div>
+
+        <div class="conteudo">
+            <div class="abas">
+                <div class="aba ativa" onclick="mudarAba('detalhes')">Detalhes</div>
+                <div class="aba" onclick="mudarAba('novo-pedido')">Novo Pedido</div>
+                <div class="aba" onclick="mudarAba('add-produto')">Adicionar Produto</div>
+            </div>
+
+            <!-- Aba de Detalhes -->
+            <div id="aba-detalhes" class="aba-conteudo">
+                <h2>Detalhes do Pedido</h2>
+                <div id="tabelaContainer" class="loading">Selecione um pedido</div>
+                <button onclick="salvarAlteracoes()">Salvar Alterações</button>
+            </div>
+
+            <!-- Aba de Novo Pedido -->
+            <div id="aba-novo-pedido" class="aba-conteudo" style="display: none;">
+                <div class="formulario">
+                    <h2>Criar Novo Pedido</h2>
+                    <div id="errorNovoPedido" class="error-message"></div>
+                    <div class="form-group">
+                        <input type="text" id="novoPedidoNome" placeholder="Nome do Pedido *" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="date" id="novoPedidoData" required>
+                    </div>
+                    <button class="secondary" onclick="criarNovoPedido()">Criar Pedido</button>
+                </div>
+            </div>
+
+            <!-- Aba de Adicionar Produto -->
+            <div id="aba-add-produto" class="aba-conteudo" style="display: none;">
+                <div class="formulario">
+                    <h2>Adicionar Produto ao Pedido</h2>
+                    <div id="errorContainer" class="error-message"></div>
+                    <div class="form-group">
+                        <input type="text" id="novoProdutoNome" placeholder="Nome do Produto *" required>
+                    </div>
+                    <div class="form-group-grid" id="numeracoesContainer">
+                        <!-- Campos gerados via JavaScript -->
+                    </div>
+                    <button class="secondary" onclick="adicionarProduto()">Adicionar Produto</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:4OHEwWeq';
+        let pedidoAtualId = null;
+        const CACHE_TTL = 300000;
+        
+        const requestQueue = {
+          queue: [],
+          isProcessing: false,
+          lastRequestTime: 0,
+        
+          async add(requestFn) {
+            return new Promise((resolve, reject) => {
+              this.queue.push({ requestFn, resolve, reject });
+              this.processNext();
+            });
+          },
+        
+          async processNext() {
+            if (this.isProcessing || this.queue.length === 0) return;
+            this.isProcessing = true;
+            const now = Date.now();
+            const timeSinceLast = now - this.lastRequestTime;
+            if (timeSinceLast < 2100) await new Promise(resolve => setTimeout(resolve, 2100 - timeSinceLast));
+            const { requestFn, resolve, reject } = this.queue.shift();
+            try {
+              const result = await this.retry(requestFn);
+              resolve(result);
+            } catch (error) {
+              reject(error);
+            } finally {
+              this.lastRequestTime = Date.now();
+              this.isProcessing = false;
+              this.processNext();
+            }
+          },
+        
+          async retry(requestFn, retries = 3) {
+            try {
+              return await requestFn();
+            } catch (error) {
+              if (error.response?.status === 429 && retries > 0) {
+                const delay = error.response.headers['retry-after'] ? error.response.headers['retry-after'] * 1000 : 21000;
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.retry(requestFn, retries - 1);
+              }
+              throw error;
+            }
+          }
+        };
+        
+        const cache = {
+          lojas: null,
+          pedidos: {},
+        
+          getLojas() {
+            if (this.lojas && Date.now() - this.lojas.timestamp < CACHE_TTL) return this.lojas.data;
+            return null;
+          },
+        
+          setLojas(data) {
+            this.lojas = { data, timestamp: Date.now() };
+          },
+        
+          getPedidos(lojaId) {
+            return this.pedidos[lojaId]?.data || null;
+          },
+        
+          setPedidos(lojaId, data) {
+            this.pedidos[lojaId] = { data, timestamp: Date.now() };
+          }
+        };
+        
+        function mudarAba(aba) {
+          document.querySelectorAll('.aba-conteudo').forEach(el => el.style.display = 'none');
+          document.querySelectorAll('.aba').forEach(el => el.classList.remove('ativa'));
+          document.getElementById(`aba-${aba}`).style.display = 'block';
+          document.querySelector(`[onclick="mudarAba('${aba}')"]`).classList.add('ativa');
+          if (aba === 'detalhes' && document.getElementById('selecionarPedido').value) carregarDetalhes(true);
+        }
+        
+        async function carregarLojas() {
+          try {
+            const cached = cache.getLojas();
+            if (cached) return cached;
+            const response = await requestQueue.add(() => axios.get(`${API_BASE_URL}/lojas`));
+            const select = document.getElementById('selecionarLoja');
+            select.innerHTML = '<option value="">Selecione uma loja</option>';
+            response.data.forEach(loja => select.add(new Option(loja.loja_nome, loja.id)));
+            cache.setLojas(response.data);
+            return response.data;
+          } catch (error) {
+            console.error('Erro ao carregar lojas:', error);
+            alert('Erro ao carregar lista de lojas');
+          }
+        }
+        
+        async function carregarPedidos() {
+    const lojaId = document.getElementById('selecionarLoja').value;
+    const select = document.getElementById('selecionarPedido');
+    
+    select.innerHTML = '<option value="">Carregando...</option>';
+    if (!lojaId) {
+        select.innerHTML = '<option value="">Selecione uma loja</option>';
+        return;
+    }
+
+    try {
+        const cached = cache.getPedidos(lojaId);
+        if (cached) {
+            select.innerHTML = '<option value="">Selecione um pedido</option>';
+            if (Array.isArray(cached)) {
+                cached.forEach(pedido => {
+                    const dataPedido = new Date(pedido.pedido_data).toLocaleDateString();
+                    select.add(new Option(`${pedido.pedido_nome} - ${dataPedido}`, pedido.id));
+                });
+            }
+            return;
+        }
+
+        const response = await requestQueue.add(() => 
+            axios.get(`${API_BASE_URL}/pedidos_loja/${lojaId}`)
+        );
+
+        // Converter para array se necessário
+        const data = Array.isArray(response.data) ? response.data : [response.data];
+
+        select.innerHTML = '<option value="">Selecione um pedido</option>';
+        data.forEach(pedido => {
+            const dataPedido = new Date(pedido.pedido_data).toLocaleDateString();
+            select.add(new Option(`${pedido.pedido_nome} - ${dataPedido}`, pedido.id));
+        });
+        
+        cache.setPedidos(lojaId, data);
+    } catch (error) {
+        console.error('Erro detalhado:', {
+            error: error.message,
+            response: error.response?.data
+        });
+        select.innerHTML = '<option value="">Erro ao carregar</option>';
+        alert('Erro ao carregar pedidos. Verifique o console para detalhes.');
+    }
+}
+        
+        async function carregarDetalhes(force = false) {
+          const novoPedidoId = document.getElementById('selecionarPedido').value;
+          if (!novoPedidoId) {
+            document.getElementById('tabelaContainer').innerHTML = 'Selecione um pedido';
+            return;
+          }
+          if (novoPedidoId === pedidoAtualId && !force) return;
+          pedidoAtualId = novoPedidoId;
+          document.getElementById('tabelaContainer').innerHTML = 'Carregando...';
+          try {
+            const response = await requestQueue.add(() => axios.get(`${API_BASE_URL}/pedidos_sku`, { params: { pedidos_loja_id: pedidoAtualId } }));
+            criarTabelaNumeracoes(response.data);
+          } catch (error) {
+            console.error('Erro ao carregar detalhes:', error);
+            document.getElementById('tabelaContainer').innerHTML = 'Erro ao carregar detalhes';
+          }
+        }
+        
+        function criarTabelaNumeracoes(skus) {
+          const container = document.getElementById('tabelaContainer');
+          const numeracoes = [33, 34, 35, 36, 37, 38, 39];
+          const produtos = skus.reduce((acc, sku) => {
+            const key = sku.produto_nome.trim().toLowerCase();
+            if (!acc[key]) acc[key] = { nome: sku.produto_nome, numeracoes: {} };
+            acc[key].numeracoes[sku.produto_numeracao] = sku;
+            return acc;
+          }, {});
+          let html = `<table><tr><th>Produto</th>${numeracoes.map(n => `<th>${n}</th>`).join('')}</tr>`;
+          Object.values(produtos).forEach(produto => {
+            html += `<tr><td>${produto.nome}</td>`;
+            numeracoes.forEach(num => {
+              const sku = produto.numeracoes[num] || { 
+                id: null,
+                produto_nome: produto.nome,
+                produto_numeracao: num,
+                pedido_quantidade: 0,
+                pedidos_quantidade_entregue: 0
+              };
+              const total = sku.pedido_quantidade || 0;
+              const entregue = sku.pedidos_quantidade_entregue || 0;
+              const restante = total - entregue;
+              html += `<td>
+                <div class="status ${restante === 0 ? 'entregue' : 'pendente'}">Total: ${total}</div>
+                <div>Entregue: ${entregue}</div>
+                <input class="numeracao-input" type="number" value="${entregue}" min="0" max="${total}" 
+                  data-sku-id="${sku.id ? parseInt(sku.id) : ''}" ${sku.id && total > 0 ? '' : 'disabled'}>
+                <div>Restante: ${restante}</div>
+              </td>`;
+            });
+            html += `</tr>`;
+          });
+          container.innerHTML = html + '</table>';
+        }
+        
+        function validarEntrada(input) {
+          const max = parseInt(input.getAttribute('max')) || 0;
+          let valor = parseInt(input.value) || 0;
+          if (valor < 0) valor = 0;
+          if (valor > max) valor = max;
+          input.value = valor;
+          input.parentElement.querySelector('div:last-child').textContent = `Restante: ${max - valor}`;
+        }
+        
+        async function salvarAlteracoes() {
+          const inputs = document.querySelectorAll('.numeracao-input:not(:disabled)');
+          const updates = [];
+          inputs.forEach(input => {
+            const skuId = parseInt(input.dataset.skuId);
+            const valor = parseInt(input.value) || 0;
+            const max = parseInt(input.getAttribute('max')) || 0;
+            if (skuId && valor > 0 && valor <= max) updates.push({ pedidos_sku_id: skuId, pedido_quantidade_entregue: valor });
+          });
+          if (updates.length === 0) {
+            alert('Nenhuma alteração válida para salvar');
+            return;
+          }
+          const loader = document.createElement('div');
+          loader.className = 'loading-overlay';
+          loader.innerHTML = '<div class="spinner">Salvando...</div>';
+          document.body.appendChild(loader);
+          try {
+            await Promise.all(updates.map(update => 
+              requestQueue.add(() => axios.patch(`${API_BASE_URL}/pedidos_sku_patch`, update))
+            ));
+            await carregarDetalhes(true);
+            alert('Alterações salvas com sucesso!');
+          } catch (error) {
+            console.error('Erro ao salvar:', error);
+            alert(`Erro: ${error.response?.data?.message || 'Falha ao salvar alterações'}`);
+          } finally {
+            document.body.removeChild(loader);
+          }
+        }
+        
+        async function criarNovoPedido() {
+          const errorContainer = document.getElementById('errorNovoPedido');
+          errorContainer.innerHTML = '';
+          const lojaId = document.getElementById('selecionarLoja').value;
+          const nome = document.getElementById('novoPedidoNome').value;
+          const data = document.getElementById('novoPedidoData').value;
+          try {
+            if (!lojaId) throw new Error('Selecione uma loja primeiro!');
+            if (!nome || !data) throw new Error('Preencha todos os campos!');
+            const response = await requestQueue.add(() => 
+              axios.post(`${API_BASE_URL}/pedidos_loja`, {
+                lojas_id: parseInt(lojaId),
+                pedido_nome: nome,
+                pedido_data: new Date(data).toISOString().split('T')[0],
+                status: 'Pendente'
+              })
+            );
+            cache.setPedidos(lojaId, null);
+            await carregarPedidos();
+            document.getElementById('selecionarPedido').value = response.data.id;
+            mudarAba('detalhes');
+            carregarDetalhes(true);
+            alert('Pedido criado com sucesso!');
+            document.getElementById('novoPedidoNome').value = '';
+            document.getElementById('novoPedidoData').value = '';
+          } catch (error) {
+            errorContainer.innerHTML = error.message;
+            console.error('Erro ao criar pedido:', error);
+          }
+        }
+        
+        async function adicionarProduto() {
+          const loader = document.createElement('div');
+          loader.className = 'loading-overlay';
+          loader.innerHTML = '<div class="spinner">Salvando...</div>';
+          document.body.appendChild(loader);
+          const errorContainer = document.getElementById('errorContainer');
+          errorContainer.innerHTML = '';
+          try {
+            const pedidoId = document.getElementById('selecionarPedido').value;
+            const produtoNome = document.getElementById('novoProdutoNome').value.trim();
+            if (!pedidoId) throw new Error('Selecione um pedido primeiro!');
+            if (!produtoNome) throw new Error('Digite um nome para o produto!');
+            const numeracoes = [];
+            for (let num = 33; num <= 39; num++) {
+              const input = document.getElementById(`num-${num}`);
+              const quantidade = parseInt(input.value) || 0;
+              if (quantidade > 0) numeracoes.push({ numeracao: num, quantidade });
+            }
+            if (numeracoes.length === 0) throw new Error('Adicione quantidades em pelo menos uma numeração!');
+            await Promise.all(numeracoes.map(num => 
+              requestQueue.add(() => 
+                axios.post(`${API_BASE_URL}/pedidos_sku`, {
+                  pedidos_loja_id: pedidoId,
+                  produto_nome: produtoNome,
+                  produto_numeracao: num.numeracao,
+                  pedido_quantidade: num.quantidade,
+                  pedidos_quantidade_entregue: 0
+                })
+              )
+            ));
+            document.getElementById('novoProdutoNome').value = '';
+            for (let num = 33; num <= 39; num++) document.getElementById(`num-${num}`).value = 0;
+            await carregarDetalhes(true);
+            alert('Produto adicionado com sucesso!');
+          } catch (error) {
+            errorContainer.innerHTML = `<strong>Erro:</strong> ${error.message}`;
+            console.error('Erro detalhado:', error);
+          } finally {
+            document.body.removeChild(loader);
+          }
+        }
+        
+        window.addEventListener('DOMContentLoaded', () => {
+          carregarLojas();
+          gerarCamposNumeracao();
+          document.getElementById('selecionarLoja').addEventListener('change', () => {
+            cache.setPedidos(document.getElementById('selecionarLoja').value, null);
+            carregarPedidos();
+            document.getElementById('selecionarPedido').value = '';
+            document.getElementById('tabelaContainer').innerHTML = 'Selecione um pedido';
+          });
+          document.getElementById('selecionarPedido').addEventListener('change', () => {
+            if (document.getElementById('selecionarPedido').value) mudarAba('detalhes');
+          });
+        });
+        
+        function gerarCamposNumeracao() {
+          const container = document.getElementById('numeracoesContainer');
+          container.innerHTML = '';
+          for (let num = 33; num <= 39; num++) {
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.innerHTML = `<label>Numeração ${num}</label><input type="number" id="num-${num}" min="0" value="0" class="numeracao-input">`;
+            container.appendChild(div);
+          }
+        }
+        </script>
+</body>
+</html>
