@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Pedidos - Visão Completa</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>📦 Gestão de Pedidos</h1>
+    
+    <div class="loading" id="loading">Carregando dados...</div>
+    <div class="error" id="error"></div>
+
+    <div class="container">
+        <div class="card">
+            <h2>📋 Lista de Pedidos</h2>
+            <div class="seletores-container">
+                <div class="seletor-group">
+                    <label class="seletor-label" for="seletorLoja">Loja:</label>
+                    <select id="seletorLoja" class="seletor">
+                        <option value="">Selecione uma loja</option>
+                    </select>
+                </div>
+                
+                <div class="seletor-group">
+                    <label class="seletor-label" for="seletorPedido">Pedido:</label>
+                    <!-- Adicione o event listener diretamente aqui -->
+                    <select id="seletorPedido" class="seletor" disabled 
+                            onchange="carregarDetalhesPedido(this.value)">
+                        <option value="">Selecione um pedido</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📄 Detalhes do Pedido</h2>
+            <div id="detalhesPedido"></div>
+            
+            <div class="tabs">
+                <button class="tab-button active" onclick="showTab('pedida')">Quantidade Pedida</button>
+                <button class="tab-button" onclick="showTab('entregue')">Quantidade Entregue</button>
+                <button class="tab-button" onclick="showTab('saldo')">Saldo</button>
+            </div>
+        
+            <div class="table-container">
+                <table id="tabelaPedida" class="active">
+                    <thead id="headerPedida"></thead>
+                    <tbody id="bodyPedida"></tbody>
+                </table>
+                
+                <table id="tabelaEntregue">
+                    <thead id="headerEntregue"></thead>
+                    <tbody id="bodyEntregue"></tbody>
+                </table>
+                
+                <table id="tabelaSaldo">
+                    <thead id="headerSaldo"></thead>
+                    <tbody id="bodySaldo"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card importacao-container">
+            <h2>📤 Importar Entregas via XML</h2>
+            <div class="form-group">
+                <label>Loja:</label>
+                <select id="seletorLojaImportacao" class="form-input">
+                    <option value="">Selecione uma loja</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Pedido:</label>
+                <select id="selectPedido" class="form-input" disabled onchange="carregarDetalhesPedido(this.value)">
+                    <option value="">Selecione um pedido</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Arquivo XML da NFe:</label>
+                <input type="file" id="xmlInput" accept=".xml" class="form-input">
+            </div>
+            
+            <button onclick="processarXML()" class="btn-importar">Processar Entrega</button>
+            <div id="resultadoImportacao" class="upload-status"></div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
