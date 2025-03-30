@@ -11,6 +11,156 @@ const elementos = {
     // ... outros elementos
 };
 
+// Verificação de elementos críticos
+const elementosCriticos = ['listaPedidos', 'seletorLoja', 'seletorPedido'];
+elementosCriticos.forEach(id => {
+    if (!document.getElementById(id)) {
+        console.error(`Elemento #${id} não encontrado!`);
+    }
+});
+function agruparProdutos() {
+    console.log('Iniciando agrupamento...'); // Debug 1
+    
+    if (!currentSkus || currentSkus.length === 0) {
+        console.error('Nenhum dado disponível para agrupamento');
+        return {};
+    }
+
+    const agrupados = {};
+    const numerações = new Set();
+
+    currentSkus.forEach(sku => {
+        // Debug: Verifique cada SKU
+        console.log('Processando SKU:', sku); // Debug 2
+        
+        const baseId = sku._produtos?.produto_base_id;
+        const numeracao = sku._produtos?.numeracao || 'N/A';
+
+        if (!baseId || baseId === 0) {
+            console.warn('SKU sem base_id válido:', sku.id);
+            return;
+        }
+
+        if (!agrupados[baseId]) {
+            agrupados[baseId] = {
+                base_id: baseId,
+                variacoes: {}
+            };
+        }
+
+        agrupados[baseId].variacoes[numeracao] = {
+            id: sku.id,
+            codigo: sku._produtos.codigo_externo,
+            pedido: sku.pedido_quantidade || 0,
+            entregue: sku.pedido_quantidade_entregue || 0,
+            saldo: (sku.pedido_quantidade || 0) - (sku.pedido_quantidade_entregue || 0)
+        };
+
+        numerações.add(numeracao);
+    });
+
+    console.log('Agrupamento finalizado:', agrupados); // Debug 3
+    return {
+        agrupados,
+        numerações: [...numerações].sort((a, b) => {
+            if (a === 'N/A') return 1;
+            if (b === 'N/A') return -1;
+            return a - b;
+        })
+    };
+}
+
+function atualizarTabelas() {
+    console.log('Atualizando tabelas...');
+    
+    // Verificação inicial
+    if (!currentSkus || currentSkus.length === 0) {
+        console.error('Nenhum dado disponível para exibir');
+        return;
+    }
+
+    // 1. Agrupar por produto_base_id
+    const produtosAgrupados = {};
+    const todasNumeracoes = new Set();
+
+    currentSkus.forEach(sku => {
+        const baseId = sku._produtos?.produto_base_id;
+        const numeracao = sku._produtos?.numeracao || 'N/A';
+
+        if (!baseId || baseId === 0) return;
+
+        if (!produtosAgrupados[baseId]) {
+            produtosAgrupados[baseId] = {
+                base_id: baseId,
+                variacoes: {}
+            };
+        }
+
+        produtosAgrupados[baseId].variacoes[numeracao] = {
+            id: sku.id,
+            codigo: sku._produtos.codigo_externo,
+            pedido: sku.pedido_quantidade || 0,
+            entregue: sku.pedido_quantidade_entregue || 0,
+            saldo: (sku.pedido_quantidade || 0) - (sku.pedido_quantidade_entregue || 0)
+        };
+
+        todasNumeracoes.add(numeracao);
+    });
+
+    // 2. Ordenar numerações
+    const numeracoesOrdenadas = [...todasNumeracoes].sort((a, b) => {
+        if (a === 'N/A') return 1;
+        if (b === 'N/A') return -1;
+        return a - b;
+    });
+
+    // 3. Atualizar tabelas
+    const atualizarTabela = (tipo, headerId, bodyId) => {
+        const header = document.getElementById(headerId);
+        const body = document.getElementById(bodyId);
+        
+        if (!header || !body) {
+            console.error(`Elementos da tabela ${headerId}/${bodyId} não encontrados`);
+            return;
+        }
+
+        header.innerHTML = `
+            <tr>
+                <th class="base-header">Base ID</th>
+                ${numeracoesOrdenadas.map(n => `<th>${n}</th>`).join('')}
+            </tr>
+        `;
+
+        body.innerHTML = '';
+        
+        Object.values(produtosAgrupados).forEach(produto => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="base-header">${produto.base_id}</td>
+                ${numeracoesOrdenadas.map(n => {
+                    const variacao = produto.variacoes[n];
+                    if (!variacao) return '<td></td>';
+                    
+                    const valor = tipo === 'saldo' ? variacao.saldo : 
+                                 tipo === 'entregue' ? variacao.entregue : 
+                                 variacao.pedido;
+                    
+                    const classe = tipo === 'saldo' && valor < 0 ? 'saldo-negativo' : '';
+                    return `<td class="${classe}" title="${variacao.codigo}">${valor}</td>`;
+                }).join('')}
+            `;
+            body.appendChild(row);
+        });
+    };
+
+    // Atualizar todas as tabelas
+    atualizarTabela('pedido', 'headerPedida', 'bodyPedida');
+    atualizarTabela('entregue', 'headerEntregue', 'bodyEntregue');
+    atualizarTabela('saldo', 'headerSaldo', 'bodySaldo');
+
+    console.log('Tabelas atualizadas com sucesso');
+}
+
 async function carregarLojas() {
     try {
         // Verificar existência dos elementos
@@ -292,84 +442,17 @@ function exibirListaPedidos(pedidos) {
 }
 
 function calcularSaldo() {
-    const saldo = {};
-
-    currentSkus.forEach(sku => {
-        const baseId = sku._produtos.codigo_externo;
-        const numeracao = parseInt(sku._produtos.numeracao);
-        const pedido = sku.pedido_quantidade || 0;
-        const entrega = sku.pedido_quantidade_entregue || 0;
+    return currentSkus.reduce((acc, sku) => {
+        const baseId = sku._produtos.produto_base_id;
+        const numeracao = sku._produtos.numeracao;
         
-        if (!saldo[baseId]) {
-            saldo[baseId] = {};
-        }
+        if (!acc[baseId]) acc[baseId] = {};
         
-        saldo[baseId][numeracao] = pedido - entrega;
-    });
-
-    return saldo;
-}
-
-function atualizarTabelas() {
-    const atualizarHeader = (headerId) => {
-        document.getElementById(headerId).innerHTML = `
-            <tr>
-                <th class="base-header">Base ID</th>
-                ${numeracoes.map(n => `<th>${n}</th>`).join('')}
-            </tr>
-        `;
-    };
-
-    ['headerPedida', 'headerEntregue', 'headerSaldo'].forEach(atualizarHeader);
-
-    const grupos = currentSkus.reduce((acc, sku) => {
-        const baseId = sku._produtos.codigo_externo;
-        if (!acc[baseId]) {
-            acc[baseId] = { pedida: {}, entregue: {} };
-        }
-        
-        const num = parseInt(sku._produtos.numeracao);
-        acc[baseId].pedida[num] = sku.pedido_quantidade;
-        acc[baseId].entregue[num] = sku.pedido_quantidade_entregue;
-        
+        acc[baseId][numeracao] = (sku.pedido_quantidade || 0) - (sku.pedido_quantidade_entregue || 0);
         return acc;
     }, {});
-
-    const preencherTabela = (tipo, bodyId) => {
-        const tbody = document.getElementById(bodyId);
-        tbody.innerHTML = '';
-
-        Object.entries(grupos).forEach(([baseId, dados]) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td class="base-header">${baseId}</td>
-                ${numeracoes.map(n => `
-                    <td>${dados[tipo][n] || ''}</td>
-                `).join('')}
-            `;
-            tbody.appendChild(row);
-        });
-    };
-
-    preencherTabela('pedida', 'bodyPedida');
-    preencherTabela('entregue', 'bodyEntregue');
-
-    const saldo = calcularSaldo();
-    const bodySaldo = document.getElementById('bodySaldo');
-    bodySaldo.innerHTML = '';
-
-    Object.entries(saldo).forEach(([baseId, valores]) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="base-header">${baseId}</td>
-            ${numeracoes.map(n => {
-                const valor = valores[n] || 0;
-                return `<td class="${valor < 0 ? 'saldo-negativo' : ''}">${valor}</td>`;
-            }).join('')}
-        `;
-        bodySaldo.appendChild(row);
-    });
 }
+
 
 function mostrarErro(mensagem) {
     const elemento = document.getElementById('error');
