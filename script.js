@@ -35,8 +35,8 @@ async function carregarLojaAutomaticamente() {
             await carregarPedidos(lojaId);
         }
     } catch (erro) {
-        console.error('Erro ao carregar loja:', erro);
-        window.location.href = 'index.html';
+        mostrarErro(`Erro ao carregar loja: ${erro.message}`);
+        console.error(erro);
     }
 }
 
@@ -67,13 +67,15 @@ function verificarAcesso() {
         const payload = JSON.parse(base64UrlDecode(partes[1]));
 
         if (!payload.lojas_permitidas) {
-            throw new Error('Token sem permissões');
+            mostrarErro('Token não tem permissões necessárias');
+            localStorage.removeItem('authToken');
+            return;
         }
 
     } catch (erro) {
-        console.error('Erro ao verificar token:', erro.message);
+        mostrarErro(`Erro na verificação do token: ${erro.message}`);
         localStorage.removeItem('authToken');
-        window.location.href = 'index.html';
+        return;
     }
 }
 
@@ -274,11 +276,9 @@ async function carregarLojas() {
         });
 
     } catch (erro) {
-        console.error('Erro detalhado:', {
-            mensagem: erro.message,
-            stack: erro.stack,
-            elementos
-        });
+        mostrarErro(`Falha ao carregar lojas: ${erro.message}`);
+        console.error(erro);
+    });
         mostrarErro(`Falha crítica: ${erro.message}`);
     }
 }
@@ -339,11 +339,9 @@ async function carregarPedidos(lojaId) {
         exibirListaPedidos(pedidosOrdenados);
 
     } catch (erro) {
-        console.error('Erro no carregamento:', erro);
         mostrarErro(`Falha ao carregar pedidos: ${erro.message}`);
-        selectsPedido.forEach(select => {
-            select.innerHTML = '<option value="">Erro ao carregar</option>';
-        });
+        console.error(erro);
+    });
     }
 }
 
@@ -544,10 +542,18 @@ function calcularSaldo() {
 
 function mostrarErro(mensagem) {
     const elemento = document.getElementById('error');
+    
+    // Mostrar alerta
+    alert(`ERRO: ${mensagem}`);
+    
+    // Atualizar elemento de erro se existir
     if (elemento) {
         elemento.style.display = 'block';
         elemento.textContent = mensagem;
     }
+    
+    // Mantém o usuário na página para debug
+    // window.location.href = 'index.html'; ← Removido
 }
 
 function mostrarCarregamento(mostrar) {
