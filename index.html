@@ -185,11 +185,14 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Redirecionamento após login bem-sucedido
-                    window.location.href = 'pedidoloja.html'; // Altere para sua página
-                } else {
-                    throw new Error(data.message || 'Erro ao fazer login');
-                }
+    const { authToken } = await response.json();
+    
+    // Armazene o token no localStorage
+    localStorage.setItem('authToken', authToken);
+    
+    // Redirecione usando replace para evitar voltar para o login
+    window.location.replace('pedidoloja.html');
+}
 
             } catch (error) {
                 console.error('Erro:', error);
