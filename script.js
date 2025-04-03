@@ -3,6 +3,47 @@ let currentSkus = [];
 let numeracoes = [];
 let pedidosCache = new Map();
 
+document.addEventListener('DOMContentLoaded', () => {
+    verificarAcesso();
+    carregarLojaAutomaticamente();
+});
+
+async function carregarLojaAutomaticamente() {
+    try {
+        const token = localStorage.getItem('authToken');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const lojaId = payload.lojas_permitidas;
+
+        if (lojaId === 0) {
+            // Mostra seletor para todas lojas
+            await carregarLojas();
+        } else {
+            // Carrega apenas a loja permitida
+            const resposta = await fetch(`${API_URL}/lojas/${lojaId}`);
+            const loja = await resposta.json();
+            
+            preencherSelectLojas([loja]);
+            elementos.seletorLoja.value = lojaId;
+            elementos.seletorLoja.dispatchEvent(new Event('change'));
+            elementos.seletorLoja.style.display = 'none'; // Oculta o seletor
+        }
+    } catch (erro) {
+        console.error('Erro ao carregar loja:', erro);
+        mostrarErro('Acesso restrito - Loja não encontrada');
+    }
+}
+
+// Função modificada para preencher selects
+function preencherSelectLojas(lojas) {
+    const options = lojas.map(loja => 
+        `<option value="${loja.id}">${loja.loja_nome}</option>`
+    ).join('');
+    
+    [elementos.seletorLoja, elementos.seletorLojaImportacao].forEach(select => {
+        select.innerHTML = '<option value="">Selecione uma loja</option>' + options;
+    });
+}
+
 const elementos = {
     seletorLoja: document.getElementById('seletorLoja'),
     seletorLojaImportacao: document.getElementById('seletorLojaImportacao'),
