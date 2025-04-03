@@ -8,6 +8,40 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarLojaAutomaticamente();
 });
 
+async function carregarLojaAutomaticamente() {
+    try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const payload = JSON.parse(atob(token.split('.')[1]
+            .replace(/-/g, '+')
+            .replace(/_/g, '/')));
+
+        const lojaId = payload.lojas_permitidas;
+
+        if (lojaId === 0) {
+            await carregarLojas();
+            elementos.seletorLoja.style.display = 'block';
+        } else {
+            // Requisição SEM token no header
+            const resposta = await fetch(`${API_URL}/lojas?loja_id=${lojaId}`);
+            if (!resposta.ok) throw new Error('Loja não encontrada');
+            
+            const loja = await resposta.json();
+            preencherSelectLojas([loja]);
+            
+            elementos.seletorLoja.value = lojaId;
+            elementos.seletorLoja.style.display = 'none';
+            await carregarPedidos(lojaId);
+        }
+    } catch (erro) {
+        console.error('Erro ao carregar loja:', erro);
+        window.location.href = 'index.html';
+    }
+}
+
+
+
 function verificarAcesso() {
     const token = localStorage.getItem('authToken');
 
@@ -222,12 +256,7 @@ function atualizarTabelas() {
 }
 async function carregarLojas() {
     try {
-        // Verificar existência dos elementos
-        if(!elementos.seletorLoja || !elementos.seletorLojaImportacao) {
-            throw new Error('Elementos do seletor de loja não encontrados');
-        }
-
-        const resposta = await fetch(`${API_URL}/lojas`);
+        const resposta = await fetch(`${API_URL}/lojas`); // Sem headers
         if (!resposta.ok) throw new Error('Erro ao carregar lojas');
         
         const lojas = await resposta.json();
