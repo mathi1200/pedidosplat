@@ -10,22 +10,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function verificarAcesso() {
     const token = localStorage.getItem('authToken');
+    
+    // Se não tem token, volta para o login
     if (!token) {
-        window.location.href = 'pedidoloja.html';
+        window.location.href = 'index.html';
         return;
     }
-    //TEste
+
+    // Verifica token válido
     try {
-        // Decodificação segura do token
-        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        if (typeof payload.lojas_permitidas === 'undefined') {
-            throw new Error('Token inválido');
+        const payload = JSON.parse(atob(token.split('.')[1]
+            .replace(/-/g, '+')
+            .replace(/_/g, '/'));
+
+        if (!payload.lojas_permitidas) {
+            throw new Error('Token sem permissões');
         }
-    } catch (e) {
+
+    } catch (erro) {
         localStorage.removeItem('authToken');
-        window.location.href = 'index.html';
+        window.location.href = 'index.html'; // Token inválido → login
     }
 }
+
 
 async function carregarLojaAutomaticamente() {
     try {
@@ -58,14 +65,12 @@ async function carregarLojaAutomaticamente() {
             elementos.seletorLoja.value = lojaId;
             elementos.seletorLoja.dispatchEvent(new Event('change'));
             elementos.seletorLoja.style.display = 'none';
-            
-            // Atualizar interface
-            setTimeout(() => carregarPedidos(lojaId), 100);
-        }
+             elementos.seletorLoja.value = lojaId;
+        await carregarPedidos(lojaId); // ← Garante carregamento dos dados
+
     } catch (erro) {
-        console.error('Falha crítica:', erro);
-        mostrarErro(`Acesso negado: ${erro.message}`);
-        setTimeout(() => window.location.href = 'index.html', 3000);
+        console.error('Erro ao carregar loja:', erro);
+        window.location.href = 'index.html'; // Erro crítico → login
     }
 }
 
