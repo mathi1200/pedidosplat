@@ -23,7 +23,7 @@ function verificarAcesso() {
         }
     } catch (e) {
         localStorage.removeItem('authToken');
-        window.location.href = 'login.html';
+        window.location.href = 'pedidoloja.html';
     }
 }
 
