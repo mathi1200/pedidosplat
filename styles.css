@@ -148,46 +148,51 @@ h2 {
     background-color: var(--light-color);
 }
 
-/* Sistema de Tabelas */
 .table-container {
+    overflow-x: auto;
     border-radius: var(--border-radius);
     background: white;
-    box-shadow: var(--shadow-md);
-    overflow: hidden;
+    box-shadow: var(--box-shadow);
+    margin-top: 1rem;
     position: relative;
-    max-height: 600px;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    position: relative;
+    display: none;
     min-width: 600px;
+}
+
+table.active {
+    display: table;
 }
 
 th, td {
     padding: 1rem;
     text-align: center;
     border-bottom: 1px solid #eee;
+    white-space: nowrap;
 }
 
 th {
     background: var(--primary-color);
     color: white;
-    font-weight: 500;
+    font-weight: 600;
     position: sticky;
     top: 0;
-    backdrop-filter: blur(4px);
+    z-index: 1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .base-header {
     background: var(--dark-color);
     color: white;
-    font-weight: 600;
+    font-weight: bold;
     position: sticky;
     left: 0;
     z-index: 2;
-    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+    min-width: 150px;
 }
 
 tr:nth-child(even) {
@@ -195,18 +200,37 @@ tr:nth-child(even) {
 }
 
 .saldo-negativo {
-    position: relative;
-    background-color: #fff5f5;
+    background-color: #ffeaea;
     color: var(--danger-color);
-    font-weight: 600;
+    font-weight: bold;
+    animation: pulseWarning 1.5s infinite;
 }
 
-.saldo-negativo::before {
-    content: '⚠';
-    position: absolute;
-    left: 0.25rem;
-    top: 50%;
-    transform: translateY(-50%);
+/* Efeito de pulsação para saldo negativo */
+@keyframes pulseWarning {
+    0% { background-color: #ffeaea; }
+    50% { background-color: #ffd6d6; }
+    100% { background-color: #ffeaea; }
+}
+
+/* Melhoria na rolagem */
+.table-container::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 /* Sistema de Abas */
