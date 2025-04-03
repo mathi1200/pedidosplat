@@ -39,21 +39,19 @@ async function carregarLojaAutomaticamente() {
         const token = localStorage.getItem('authToken');
         if (!token) return;
 
-        // Decodificação corrigida
         const payload = JSON.parse(atob(token.split('.')[1]
             .replace(/-/g, '+')
             .replace(/_/g, '/')));
-        
+
         const lojaId = payload.lojas_permitidas;
 
         if (lojaId === 0) {
             await carregarLojas();
             elementos.seletorLoja.style.display = 'block';
         } else {
+            // REQUISIÇÃO GET COM QUERY PARAMETER
             const resposta = await fetch(`${API_URL}/lojas?loja_id=${lojaId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             
             if (!resposta.ok) throw new Error('Loja não encontrada');
@@ -61,18 +59,16 @@ async function carregarLojaAutomaticamente() {
             const loja = await resposta.json();
             preencherSelectLojas([loja]);
             
-            // Forçar atualização
             elementos.seletorLoja.value = lojaId;
-            elementos.seletorLoja.dispatchEvent(new Event('change'));
             elementos.seletorLoja.style.display = 'none';
-             elementos.seletorLoja.value = lojaId;
-        await carregarPedidos(lojaId); // ← Garante carregamento dos dados
-
+            await carregarPedidos(lojaId);
+        }
     } catch (erro) {
         console.error('Erro ao carregar loja:', erro);
-        window.location.href = 'index.html'; // Erro crítico → login
+        window.location.href = 'index.html';
     }
 }
+
 
 // Função modificada para preencher selects
 function preencherSelectLojas(lojas) {
@@ -612,4 +608,13 @@ lojaSelects.forEach(select => {
         }
     });
 });
+
+const lojaSelects = [elementos.seletorLoja, elementos.seletorLojaImportacao];
+// Adicione no final do código:
+document.addEventListener('DOMContentLoaded', () => {
+    if (elementos.seletorLoja.value) {
+        elementos.seletorLoja.dispatchEvent(new Event('change'));
+    }
+});
+
 
