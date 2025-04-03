@@ -23,7 +23,7 @@ function verificarAcesso() {
         }
     } catch (e) {
         localStorage.removeItem('authToken');
-        window.location.href = 'pedidoloja.html';
+        window.location.href = 'index.html';
     }
 }
 
@@ -43,7 +43,7 @@ async function carregarLojaAutomaticamente() {
             await carregarLojas();
             elementos.seletorLoja.style.display = 'block';
         } else {
-            const resposta = await fetch(`${API_URL}/lojas/${lojaId}`, {
+            const resposta = await fetch(`${API_URL}/lojas?loja_id=${lojaId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -65,7 +65,7 @@ async function carregarLojaAutomaticamente() {
     } catch (erro) {
         console.error('Falha crítica:', erro);
         mostrarErro(`Acesso negado: ${erro.message}`);
-        setTimeout(() => window.location.href = 'login.html', 3000);
+        setTimeout(() => window.location.href = 'index.html', 3000);
     }
 }
 
