@@ -14,7 +14,7 @@ function verificarAcesso() {
         window.location.href = 'pedidoloja.html';
         return;
     }
-    
+    //TEste
     try {
         // Decodificação segura do token
         const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
