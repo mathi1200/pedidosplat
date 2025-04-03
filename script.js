@@ -8,28 +8,64 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarLojaAutomaticamente();
 });
 
+function verificarAcesso() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    try {
+        // Decodificação segura do token
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (typeof payload.lojas_permitidas === 'undefined') {
+            throw new Error('Token inválido');
+        }
+    } catch (e) {
+        localStorage.removeItem('authToken');
+        window.location.href = 'login.html';
+    }
+}
+
 async function carregarLojaAutomaticamente() {
     try {
         const token = localStorage.getItem('authToken');
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (!token) return;
+
+        // Decodificação corrigida
+        const payload = JSON.parse(atob(token.split('.')[1]
+            .replace(/-/g, '+')
+            .replace(/_/g, '/')));
+        
         const lojaId = payload.lojas_permitidas;
 
         if (lojaId === 0) {
-            // Mostra seletor para todas lojas
             await carregarLojas();
+            elementos.seletorLoja.style.display = 'block';
         } else {
-            // Carrega apenas a loja permitida
-            const resposta = await fetch(`${API_URL}/lojas/${lojaId}`);
-            const loja = await resposta.json();
+            const resposta = await fetch(`${API_URL}/lojas/${lojaId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             
+            if (!resposta.ok) throw new Error('Loja não encontrada');
+            
+            const loja = await resposta.json();
             preencherSelectLojas([loja]);
+            
+            // Forçar atualização
             elementos.seletorLoja.value = lojaId;
             elementos.seletorLoja.dispatchEvent(new Event('change'));
-            elementos.seletorLoja.style.display = 'none'; // Oculta o seletor
+            elementos.seletorLoja.style.display = 'none';
+            
+            // Atualizar interface
+            setTimeout(() => carregarPedidos(lojaId), 100);
         }
     } catch (erro) {
-        console.error('Erro ao carregar loja:', erro);
-        mostrarErro('Acesso restrito - Loja não encontrada');
+        console.error('Falha crítica:', erro);
+        mostrarErro(`Acesso negado: ${erro.message}`);
+        setTimeout(() => window.location.href = 'login.html', 3000);
     }
 }
 
@@ -553,15 +589,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 // Event Listeners
-const lojaSelects = document.querySelectorAll('[id^="seletorLoja"]');
 lojaSelects.forEach(select => {
     select.addEventListener('change', function() {
         if (this.value) {
-            carregarPedidos(this.value);
-        } else {
-            document.querySelectorAll('[id$="Pedido"]').forEach(pedidoSelect => {
-                pedidoSelect.disabled = true;
+            // Limpar cache ao mudar de loja
+            pedidosCache.clear();
+            currentSkus = [];
+            numeracoes = [];
+            
+            // Atualizar interface
+            document.querySelectorAll('[id$="Pedido"]').forEach(p => {
+                p.innerHTML = '<option value="">Selecione um pedido</option>';
+                p.disabled = false;
             });
+            
+            carregarPedidos(this.value);
         }
     });
 });
