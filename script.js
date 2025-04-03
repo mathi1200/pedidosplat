@@ -10,32 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function verificarAcesso() {
     const token = localStorage.getItem('authToken');
-    
-    // Se não tem token, volta para o login
-    if (!token) {
-        window.location.href = 'index.html';
-        return;
-    }
-
-    // Verifica token válido
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]
-            .replace(/-/g, '+')
-            .replace(/_/g, '/'));
-
-        if (!payload.lojas_permitidas) {
-            throw new Error('Token sem permissões');
-        }
-
-    } catch (erro) {
-        localStorage.removeItem('authToken');
-        window.location.href = 'index.html'; // Token inválido → login
-    }
-}
-
-
-function verificarAcesso() {
-    const token = localStorage.getItem('authToken');
 
     if (!token) {
         window.location.href = 'index.html';
