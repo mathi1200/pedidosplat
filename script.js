@@ -35,6 +35,7 @@ function agruparProdutos() {
         
         const baseId = sku._produtos?.produto_base_id;
         const numeracao = sku._produtos?.numeracao || 'N/A';
+        const nomeBase = sku._produtos?.nome_base || 'Nome não disponível'; // <-- Nova linha
 
         if (!baseId || baseId === 0) {
             console.warn('SKU sem base_id válido:', sku.id);
@@ -44,7 +45,9 @@ function agruparProdutos() {
         if (!agrupados[baseId]) {
             agrupados[baseId] = {
                 base_id: baseId,
+                 nome_base: nomeBase,
                 variacoes: {}
+                
             };
         }
 
@@ -73,32 +76,34 @@ function agruparProdutos() {
 function atualizarTabelas() {
     console.log('Atualizando tabelas...');
     
-    // Verificação inicial
     if (!currentSkus || currentSkus.length === 0) {
         console.error('Nenhum dado disponível para exibir');
         return;
     }
 
-    // 1. Agrupar por produto_base_id
+    // 1. Agrupar por produto_base_id mantendo o nome_base
     const produtosAgrupados = {};
     const todasNumeracoes = new Set();
 
     currentSkus.forEach(sku => {
-        const baseId = sku._produtos?.produto_base_id;
-        const numeracao = sku._produtos?.numeracao || 'N/A';
+        const baseInfo = sku._produtos;
+        const baseId = baseInfo?.produto_base_id;
+        const numeracao = baseInfo?.numeracao || 'N/A';
+        const nomeBase = baseInfo?.nome_base || 'Produto sem nome';
 
         if (!baseId || baseId === 0) return;
 
         if (!produtosAgrupados[baseId]) {
             produtosAgrupados[baseId] = {
                 base_id: baseId,
+                nome_base: nomeBase, // Adicionado o nome_base aqui
                 variacoes: {}
             };
         }
 
         produtosAgrupados[baseId].variacoes[numeracao] = {
             id: sku.id,
-            codigo: sku._produtos.codigo_externo,
+            codigo: baseInfo.codigo_externo,
             pedido: sku.pedido_quantidade || 0,
             entregue: sku.pedido_quantidade_entregue || 0,
             saldo: (sku.pedido_quantidade || 0) - (sku.pedido_quantidade_entregue || 0)
@@ -114,7 +119,7 @@ function atualizarTabelas() {
         return a - b;
     });
 
-    // 3. Atualizar tabelas
+    // 3. Função para atualizar cada tabela
     const atualizarTabela = (tipo, headerId, bodyId) => {
         const header = document.getElementById(headerId);
         const body = document.getElementById(bodyId);
@@ -124,19 +129,23 @@ function atualizarTabelas() {
             return;
         }
 
+        // Cabeçalho com nome do produto
         header.innerHTML = `
             <tr>
-                <th class="base-header">Base ID</th>
+                <th class="base-header">Nome do Produto</th>
                 ${numeracoesOrdenadas.map(n => `<th>${n}</th>`).join('')}
             </tr>
         `;
 
         body.innerHTML = '';
         
+        // Preencher linhas com nome_base
         Object.values(produtosAgrupados).forEach(produto => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td class="base-header">${produto.base_id}</td>
+                <td class="base-header" title="ID: ${produto.base_id}">
+                    ${produto.nome_base}
+                </td>
                 ${numeracoesOrdenadas.map(n => {
                     const variacao = produto.variacoes[n];
                     if (!variacao) return '<td></td>';
@@ -160,7 +169,6 @@ function atualizarTabelas() {
 
     console.log('Tabelas atualizadas com sucesso');
 }
-
 async function carregarLojas() {
     try {
         // Verificar existência dos elementos
