@@ -34,37 +34,37 @@ function verificarAcesso() {
 }
 
 
-async function carregarLojaAutomaticamente() {
+function verificarAcesso() {
+    const token = localStorage.getItem('authToken');
+
+    if (!token) {
+        window.location.href = 'index.html';
+        return;
+    }
+
     try {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-
-        const payload = JSON.parse(atob(token.split('.')[1]
-            .replace(/-/g, '+')
-            .replace(/_/g, '/')));
-
-        const lojaId = payload.lojas_permitidas;
-
-        if (lojaId === 0) {
-            await carregarLojas();
-            elementos.seletorLoja.style.display = 'block';
-        } else {
-            // REQUISIÇÃO GET COM QUERY PARAMETER
-            const resposta = await fetch(`${API_URL}/lojas?loja_id=${lojaId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (!resposta.ok) throw new Error('Loja não encontrada');
-            
-            const loja = await resposta.json();
-            preencherSelectLojas([loja]);
-            
-            elementos.seletorLoja.value = lojaId;
-            elementos.seletorLoja.style.display = 'none';
-            await carregarPedidos(lojaId);
+        const partes = token.split('.');
+        if (partes.length !== 3) {
+            throw new Error('Token inválido');
         }
+
+        function base64UrlDecode(str) {
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            while (str.length % 4) {
+                str += '=';
+            }
+            return atob(str);
+        }
+
+        const payload = JSON.parse(base64UrlDecode(partes[1]));
+
+        if (!payload.lojas_permitidas) {
+            throw new Error('Token sem permissões');
+        }
+
     } catch (erro) {
-        console.error('Erro ao carregar loja:', erro);
+        console.error('Erro ao verificar token:', erro.message);
+        localStorage.removeItem('authToken');
         window.location.href = 'index.html';
     }
 }
