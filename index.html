@@ -164,41 +164,45 @@
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            
-            try {
-                const response = await fetch('https://x8ki-letl-twmt.n7.xano.io/api:LrfawjfG/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: email,
-                        password: password
-                    })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-    const { authToken } = await response.json();
+      document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
     
-    // Armazene o token no localStorage
-    localStorage.setItem('authToken', authToken);
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
     
-    // Redirecione usando replace para evitar voltar para o login
-    window.location.replace('pedidoloja.html');
-}
-
-            } catch (error) {
-                console.error('Erro:', error);
-                alert(error.message || 'Erro ao conectar com o servidor');
-            }
+    try {
+        const response = await fetch('https://x8ki-letl-twmt.n7.xano.io/api:LrfawjfG/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email,
+                password: password
+            })
         });
+
+        // Corrigindo a leitura duplicada do body
+        const data = await response.json(); // Ler apenas uma vez
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Erro ao fazer login');
+        }
+
+        // Armazenar o token corretamente
+        localStorage.setItem('authToken', data.authToken);
+        
+        // Redirecionamento seguro
+        window.location.href = 'pedidoloja.html';
+
+    } catch (error) {
+        console.error('Erro:', error);
+        alert(error.message || 'Erro ao conectar com o servidor');
+        
+        // Limpar token em caso de erro
+        localStorage.removeItem('authToken');
+    }
+});
     </script>
 </body>
 </html>
