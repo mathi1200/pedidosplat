@@ -43,7 +43,6 @@ function verificarAcesso() {
     }
 }
 
-
 // Função modificada para preencher selects
 function preencherSelectLojas(lojas) {
     const options = lojas.map(loja => 
@@ -563,6 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarLojas();
     }
 });
+
+const lojaSelects = [elementos.seletorLoja, elementos.seletorLojaImportacao];
 // Event Listeners
 lojaSelects.forEach(select => {
     select.addEventListener('change', function() {
@@ -583,7 +584,8 @@ lojaSelects.forEach(select => {
     });
 });
 
-const lojaSelects = [elementos.seletorLoja, elementos.seletorLojaImportacao];
+
+
 // Adicione no final do código:
 document.addEventListener('DOMContentLoaded', () => {
     if (elementos.seletorLoja.value) {
