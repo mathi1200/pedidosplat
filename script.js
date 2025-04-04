@@ -258,19 +258,17 @@ function atualizarTabelas() {
 }
 async function carregarLojas() {
     try {
-        const resposta = await fetch(`${API_URL}/lojas`); // Sem headers
+        const resposta = await fetch(`${API_URL}/lojas`);
         if (!resposta.ok) throw new Error('Erro ao carregar lojas');
         
         const lojas = await resposta.json();
 
-        // Template para options
         const optionsTemplate = lojas.map(loja => 
             `<option value="${loja.id}">
                 ${loja.loja_nome} (${formatarCNPJ(loja.loja_cnpj)})
             </option>`
         ).join('');
 
-        // Preencher selects
         [elementos.seletorLoja, elementos.seletorLojaImportacao].forEach(select => {
             select.innerHTML = '<option value="">Selecione uma loja</option>' + optionsTemplate;
         });
@@ -278,8 +276,6 @@ async function carregarLojas() {
     } catch (erro) {
         mostrarErro(`Falha ao carregar lojas: ${erro.message}`);
         console.error(erro);
-    });
-        mostrarErro(`Falha crítica: ${erro.message}`);
     }
 }
 
