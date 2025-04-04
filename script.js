@@ -8,75 +8,74 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarLojaAutomaticamente();
 });
 
+async function fazerLogin(email, senha) {
+    try {
+        const resposta = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, senha })
+        });
+
+        const dados = await resposta.json();
+        console.log('Resposta do login:', dados); // Debug
+        
+        localStorage.setItem('authToken', dados.authToken);
+        localStorage.setItem('lojasPermitidas', dados.lojas_permitidas);
+        console.log('Dados armazenados:', { // Debug
+            token: dados.authToken,
+            lojasPermitidas: dados.lojas_permitidas
+        });
+
+        window.location.href = 'pedidoloja.html';
+    } catch (erro) {
+        console.error('Erro no login:', erro); // Debug
+        mostrarErro('Login falhou: ' + erro.message);
+    }
+}
+
+// Modificação na função carregarLojaAutomaticamente
 async function carregarLojaAutomaticamente() {
     try {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-
-        const payload = JSON.parse(atob(token.split('.')[1]
-            .replace(/-/g, '+')
-            .replace(/_/g, '/')));
-
-        const lojaId = payload.lojas_permitidas;
-
-        if (lojaId === 0) {
+        const lojasPermitidas = localStorage.getItem('lojasPermitidas');
+        console.log('Lojas permitidas do localStorage:', lojasPermitidas); // Debug
+        
+        if (lojasPermitidas === '0') {
+            console.log('Carregando todas as lojas...');
             await carregarLojas();
             elementos.seletorLoja.style.display = 'block';
-        } else {
-            // Requisição SEM token no header
-            const resposta = await fetch(`${API_URL}/lojas?loja_id=${lojaId}`);
-            if (!resposta.ok) throw new Error('Loja não encontrada');
+        } 
+        else {
+            console.log(`Carregando loja específica ID: ${lojasPermitidas}`);
+            const resposta = await fetch(`${API_URL}/lojas?loja_id=${lojasPermitidas}`);
+            console.log('Resposta da API (/lojas):', resposta); // Debug
             
             const loja = await resposta.json();
-            preencherSelectLojas([loja]);
+            console.log('Dados da loja:', loja); // Debug
             
-            elementos.seletorLoja.value = lojaId;
+            preencherSelectLojas([loja]);
             elementos.seletorLoja.style.display = 'none';
-            await carregarPedidos(lojaId);
+            await carregarPedidos(lojasPermitidas);
         }
+
     } catch (erro) {
-        mostrarErro(`Erro ao carregar loja: ${erro.message}`);
-        console.error(erro);
+        console.error('Erro no carregamento de lojas:', erro); // Debug detalhado
+        mostrarErro('Erro ao carregar lojas: ' + erro.message);
     }
 }
 
 
-
 function verificarAcesso() {
+    const lojasPermitidas = localStorage.getItem('lojasPermitidas');
     const token = localStorage.getItem('authToken');
 
-    if (!token) {
+    if (!token || lojasPermitidas === null) {
+        mostrarErro('Faça login para acessar');
         window.location.href = 'index.html';
         return;
     }
 
-    try {
-        const partes = token.split('.');
-        if (partes.length !== 3) {
-            throw new Error('Token inválido');
-        }
-
-        function base64UrlDecode(str) {
-            str = str.replace(/-/g, '+').replace(/_/g, '/');
-            while (str.length % 4) {
-                str += '=';
-            }
-            return atob(str);
-        }
-
-        const payload = JSON.parse(base64UrlDecode(partes[1]));
-
-        if (!payload.lojas_permitidas) {
-            mostrarErro('Token não tem permissões necessárias');
-            localStorage.removeItem('authToken');
-            return;
-        }
-
-    } catch (erro) {
-        mostrarErro(`Erro na verificação do token: ${erro.message}`);
-        localStorage.removeItem('authToken');
-        return;
-    }
+    // Se chegou aqui, acesso permitido
+    console.log('Loja permitida:', lojasPermitidas);
 }
 
 // Função modificada para preencher selects
@@ -95,9 +94,10 @@ const elementos = {
     seletorLojaImportacao: document.getElementById('seletorLojaImportacao'),
     seletorPedido: document.getElementById('seletorPedido'),
     selectPedido: document.getElementById('selectPedido'),
-    // ... outros elementos
+    listaPedidos: document.getElementById('listaPedidos'),
+    error: document.getElementById('error'),
+    loading: document.getElementById('loading')
 };
-
 // Verificação de elementos críticos
 const elementosCriticos = ['listaPedidos', 'seletorLoja', 'seletorPedido'];
 elementosCriticos.forEach(id => {
@@ -256,26 +256,21 @@ function atualizarTabelas() {
 
     console.log('Tabelas atualizadas com sucesso');
 }
+
 async function carregarLojas() {
     try {
+        console.log('Iniciando carregamento de todas as lojas...');
         const resposta = await fetch(`${API_URL}/lojas`);
-        if (!resposta.ok) throw new Error('Erro ao carregar lojas');
+        console.log('Resposta completa (/lojas):', resposta);
         
         const lojas = await resposta.json();
-
-        const optionsTemplate = lojas.map(loja => 
-            `<option value="${loja.id}">
-                ${loja.loja_nome} (${formatarCNPJ(loja.loja_cnpj)})
-            </option>`
-        ).join('');
-
-        [elementos.seletorLoja, elementos.seletorLojaImportacao].forEach(select => {
-            select.innerHTML = '<option value="">Selecione uma loja</option>' + optionsTemplate;
-        });
-
+        console.log('Lista completa de lojas:', lojas);
+        
+        preencherSelectLojas(lojas);
+        
     } catch (erro) {
-        mostrarErro(`Falha ao carregar lojas: ${erro.message}`);
-        console.error(erro);
+        console.error('Erro ao carregar lojas:', erro);
+        mostrarErro('Falha ao carregar lista completa de lojas');
     }
 }
 
@@ -337,9 +332,8 @@ async function carregarPedidos(lojaId) {
     } catch (erro) {
         mostrarErro(`Falha ao carregar pedidos: ${erro.message}`);
         console.error(erro);
-    });
+    };
     }
-}
 
 function atualizarSelectsPedido(data, selects) {
     const options = data.map(pedido => 
@@ -575,12 +569,14 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM carregado, elementos:', elementos);
     
     // Verificar elementos críticos
-    const elementosCriticos = [
-        'seletorLoja', 
-        'seletorLojaImportacao',
-        'seletorPedido',
-        'selectPedido'
-    ];
+    const elementosCriticos = ['seletorLoja', 'seletorPedido', 'listaPedidos', 'error', 'loading'];
+    elementosCriticos.forEach(id => {
+        if (!elementos[id]) {
+            const mensagem = `Elemento crítico #${id} não encontrado!`;
+            alert(mensagem);
+            throw new Error(mensagem); // Interrompe a execução
+        }
+    });
     
     elementosCriticos.forEach(id => {
         if (!elementos[id]) {
