@@ -427,3 +427,32 @@ tr:nth-child(even) {
     50% { opacity: 0.3; }
     100% { opacity: 1; }
 }
+
+.upload-status {
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.upload-status.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.upload-status.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+#resultadoImportacao {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.upload-status:empty {
+    display: none;
+}
