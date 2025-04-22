@@ -3,6 +3,13 @@ let currentSkus = [];
 let numeracoes = [];
 let pedidosCache = new Map();
 
+currentSkus.forEach((sku, index) => {
+    if (!sku._produtos?.produto_base_id) {
+        console.error(`SKU inválido na posição ${index}:`, sku);
+        mostrarErro(`Erro no produto ID ${sku.id} - Dados incompletos`);
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     verificarAcesso();
     carregarLojaAutomaticamente();
@@ -99,128 +106,96 @@ elementosCriticos.forEach(id => {
     }
 }); 
 function agruparProdutos() {
-    console.log('Iniciando agrupamento...'); // Debug 1
-    
-    if (!currentSkus || currentSkus.length === 0) {
-        console.error('Nenhum dado disponível para agrupamento');
-        return {};
-    }
-
     const agrupados = {};
-    const numerações = new Set();
-
-    currentSkus.forEach(sku => {
-        // Debug: Verifique cada SKU
-        console.log('Processando SKU:', sku); // Debug 2
-        
-        const baseId = sku._produtos?.produto_base_id;
-        const numeracao = sku._produtos?.numeracao || 'N/A';
-        const nomeBase = sku._produtos?.nome_base || 'Nome não disponível'; // <-- Nova linha
-
-        if (!baseId || baseId === 0) {
-            console.warn('SKU sem base_id válido:', sku.id);
-            return;
-        }
-
-        if (!agrupados[baseId]) {
-            agrupados[baseId] = {
-                base_id: baseId,
-                 nome_base: nomeBase,
-                variacoes: {}
-                
-            };
-        }
-
-        agrupados[baseId].variacoes[numeracao] = {
-            id: sku.id,
-            codigo: sku._produtos.codigo_externo,
-            pedido: sku.pedido_quantidade || 0,
-            entregue: sku.pedido_quantidade_entregue || 0,
-            saldo: (sku.pedido_quantidade || 0) - (sku.pedido_quantidade_entregue || 0)
-        };
-
-        numerações.add(numeracao);
-    });
-
-    console.log('Agrupamento finalizado:', agrupados); // Debug 3
-    return {
-        agrupados,
-        numerações: [...numerações].sort((a, b) => {
-            if (a === 'N/A') return 1;
-            if (b === 'N/A') return -1;
-            return a - b;
-        })
-    };
-}
-
-function atualizarTabelas() {
-    console.log('Atualizando tabela...');
-    
-    if (!currentSkus || currentSkus.length === 0) {
-        console.error('Nenhum dado disponível para exibir');
-        return;
-    }
-
-    const produtosAgrupados = {};
-    const todasNumeracoes = new Set();
 
     currentSkus.forEach(sku => {
         const baseInfo = sku._produtos;
         const baseId = baseInfo?.produto_base_id;
         const numeracao = baseInfo?.numeracao || 'N/A';
-        const nomeBase = baseInfo?.nome_base || 'Produto sem nome';
 
         if (!baseId || baseId === 0) return;
 
-        if (!produtosAgrupados[baseId]) {
-            produtosAgrupados[baseId] = {
+        if (!agrupados[baseId]) {
+            agrupados[baseId] = {
                 base_id: baseId,
-                nome_base: nomeBase,
+                nome_base: baseInfo.nome_base || 'Nome não disponível',
                 variacoes: {}
             };
         }
 
-        // Apenas quantidade entregue
-        produtosAgrupados[baseId].variacoes[numeracao] = {
+        agrupados[baseId].variacoes[numeracao] = {
             codigo: baseInfo.codigo_externo,
-            entregue: sku.pedido_quantidade || 0
+            quantidade: sku.pedido_quantidade || 0
         };
+    });
 
+    return agrupados;
+}
+
+function atualizarTabelas() {
+    const produtosAgrupados = {};
+    const todasNumeracoes = new Set();
+
+    // Passo 1: Normalização e consolidação dos dados
+    currentSkus.forEach(sku => {
+        const baseInfo = sku._produtos;
+        const baseId = baseInfo?.produto_base_id;
+        
+        // Normalização crítica ↓
+        const numeracao = (baseInfo?.numeracao?.toString() || 'N/A')
+            .trim() // Remove espaços extras
+            .replace(/[^0-9]/g, ''); // Remove caracteres não numéricos
+
+        if (!baseId) {
+            console.warn('SKU ignorado (sem produto_base_id):', sku);
+            return;
+        }
+
+        // Inicialização do grupo
+        if (!produtosAgrupados[baseId]) {
+            produtosAgrupados[baseId] = {
+                base_id: baseId,
+                nome_base: baseInfo.nome_base?.replace(/�/g, 'Ç') || 'Produto desconhecido', // Corrige caracteres
+                variacoes: {},
+                totalGeral: 0
+            };
+        }
+
+        const grupo = produtosAgrupados[baseId];
+        const quantidade = Math.max(Number(sku.pedido_quantidade) || 0, 0); // Força número positivo
+
+        // Consolidação ↓
+        grupo.variacoes[numeracao] = (grupo.variacoes[numeracao] || 0) + quantidade;
+        grupo.totalGeral += quantidade;
         todasNumeracoes.add(numeracao);
     });
 
+    // Passo 2: Ordenação numérica robusta
     const numeracoesOrdenadas = [...todasNumeracoes].sort((a, b) => {
-        if (a === 'N/A') return 1;
-        if (b === 'N/A') return -1;
-        return a - b;
+        const numA = parseInt(a, 10) || 9999; // 'N/A' vai para o final
+        const numB = parseInt(b, 10) || 9999;
+        return numA - numB;
     });
 
-    // Atualizar única tabela
+    // Passo 3: Renderização da tabela
     const header = document.getElementById('headerEntregue');
     const body = document.getElementById('bodyEntregue');
 
     header.innerHTML = `
         <tr>
-            <th class="base-header">Produto</th>
+            <th>Produto</th>
             ${numeracoesOrdenadas.map(n => `<th>${n}</th>`).join('')}
+            <th>Total</th>
         </tr>
     `;
 
-    body.innerHTML = '';
-    
-    Object.values(produtosAgrupados).forEach(produto => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="base-header" title="ID: ${produto.base_id}">
-                ${produto.nome_base}
-            </td>
-            ${numeracoesOrdenadas.map(n => {
-                const variacao = produto.variacoes[n];
-                return `<td title="${variacao?.codigo || ''}">${variacao?.entregue || 0}</td>`;
-            }).join('')}
-        `;
-        body.appendChild(row);
-    });
+    body.innerHTML = Object.values(produtosAgrupados).map(grupo => `
+        <tr>
+            <td>${grupo.nome_base} (ID: ${grupo.base_id})</td>
+            ${numeracoesOrdenadas.map(n => `<td>${grupo.variacoes[n] || 0}</td>`).join('')}
+            <td class="total">${grupo.totalGeral}</td>
+        </tr>
+    `).join('');
 }
 
 async function carregarLojas() {
@@ -309,73 +284,116 @@ function atualizarSelectsPedido(data, selects) {
     });
 }
 async function processarXML() {
-        try {
-            // Verificar existência do elemento
-            const resultado = elementos.resultadoImportacao;
-            if (!resultado) {
-                throw new Error('Elemento de resultado não foi encontrado no HTML');
-            }
-    
-            const pedidoId = document.getElementById('selectPedido').value;
-            const fileInput = document.getElementById('xmlInput');
-    
-            // Validações
-            if (!pedidoId) throw new Error('Selecione um pedido antes de importar');
-            if (!fileInput?.files?.[0]) throw new Error('Selecione um arquivo XML válido');
+    try {
+        const resultado = elementos.resultadoImportacao;
+        if (!resultado) throw new Error('Elemento de resultado não encontrado');
 
-        const xmlString = await fileInput.files[0].text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        const pedidoId = document.getElementById('selectPedido').value;
+        const fileInput = document.getElementById('xmlInput');
         
-        const ns = { nfe: 'http://www.portalfiscal.inf.br/nfe' };
-        const produtos = [];
+        // Validações
+        if (!pedidoId) throw new Error('Selecione um pedido antes de importar');
+        if (!fileInput?.files?.[0]) throw new Error('Selecione um arquivo XML válido');
+
+        // 1. Obter produtos existentes do pedido
+        const produtosExistentes = await obterProdutosDoPedido(pedidoId);
         
-        Array.from(xmlDoc.getElementsByTagNameNS(ns.nfe, 'det')).forEach(det => {
-            const prod = det.getElementsByTagNameNS(ns.nfe, 'prod')[0];
-            if (prod) {
-                const codigo = prod.getElementsByTagNameNS(ns.nfe, 'cProd')[0]?.textContent;
-                const quantidade = parseFloat(prod.getElementsByTagNameNS(ns.nfe, 'qCom')[0]?.textContent);
+        // 2. Processar XML
+        const produtosXML = await extrairProdutosXML(fileInput.files[0]);
+        
+        // 3. Combinar dados
+        const produtosAtualizados = combinarQuantidades(produtosExistentes, produtosXML);
 
-                if (codigo && !isNaN(quantidade)) {
-                    produtos.push({
-                        codigo_externo: codigo.padStart(5, '0'),
-                        quantidade_entregue: quantidade
-                    });
-                }
-            }
-        });
+        // 4. Enviar para API
+        const resposta = await atualizarProdutosNaAPI(pedidoId, produtosAtualizados);
 
-        if (produtos.length === 0) throw new Error('Nenhum produto válido encontrado no XML');
-
-            const resposta = await fetch(`${API_URL}/atualizarquantidade_0`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                pedidos_loja_id: Number(pedidoId),
-                produtos_entregues: produtos
-            })
-        });
-
-        if (!resposta.ok) {
-            const erroData = await resposta.json();
-            throw new Error(erroData.message || 'Erro na atualização');
-        }
-
+        // 5. Atualizar UI
         resultado.className = 'upload-status success';
-        resultado.innerHTML = `
-            ✅ ${produtos.length} produtos atualizados<br>
-            <small>ID Pedido: ${pedidoId}</small>
-        `;
+        resultado.innerHTML = `✅ ${produtosAtualizados.length} produtos processados`;
+        
+        // 6. Recarregar dados
+        await carregarDetalhesPedido(pedidoId);
 
     } catch (erro) {
-        if (elementos.resultadoImportacao) {
-            elementos.resultadoImportacao.className = 'upload-status error';
-            elementos.resultadoImportacao.textContent = `❌ Erro: ${erro.message}`;
-        } else {
-            alert(`ERRO CRÍTICO: ${erro.message}`); // Fallback
-        }
-        console.error(erro);
+        console.error('Erro no processamento:', erro);
+        elementos.resultadoImportacao.className = 'upload-status error';
+        elementos.resultadoImportacao.textContent = `❌ Erro: ${erro.message}`;
     }
+}
+
+// Funções auxiliares
+async function obterProdutosDoPedido(pedidoId) {
+    const response = await fetch(`${API_URL}/pedidos_sku?pedido_loja_id=${pedidoId}`);
+    if (!response.ok) throw new Error('Falha ao buscar produtos existentes');
+    return await response.json();
+}
+
+async function extrairProdutosXML(arquivoXML) {
+    const xmlString = await arquivoXML.text();
+    const xmlDoc = new DOMParser().parseFromString(xmlString, "text/xml");
+    const ns = { nfe: 'http://www.portalfiscal.inf.br/nfe' };
+
+    return Array.from(xmlDoc.getElementsByTagNameNS(ns.nfe, 'det')).map(det => {
+        const prod = det.getElementsByTagNameNS(ns.nfe, 'prod')[0];
+        return {
+            codigo_externo: prod.getElementsByTagNameNS(ns.nfe, 'cProd')[0].textContent.padStart(5, '0'),
+            quantidade: parseFloat(prod.getElementsByTagNameNS(ns.nfe, 'qCom')[0].textContent)
+        };
+    }).filter(p => p.codigo_externo && !isNaN(p.quantidade));
+}
+
+function combinarQuantidades(existentes, novos) {
+    const mapaProdutos = new Map();
+
+    novos.forEach(prod => {
+        try {
+            const codigo = prod.codigo_externo?.padStart(5, '0') || 'N/A';
+            const quantidade = Number(prod.quantidade) || 0;
+            
+            if (codigo !== 'N/A' && !isNaN(quantidade)) {
+                mapaProdutos.set(codigo, {
+                    codigo_externo: codigo,
+                    quantidade: quantidade // Substitui a soma pela atribuição direta
+                });
+            }
+        } catch (e) {
+            console.warn('Produto inválido ignorado:', prod);
+        }
+    });
+
+    // Mantém os existentes que não foram substituídos
+    existentes.forEach(prod => {
+        const codigoRaw = prod._produtos?.codigo_externo;
+        const codigo = codigoRaw ? codigoRaw.padStart(5, '0') : 'N/A';
+        if (codigo !== 'N/A' && !mapaProdutos.has(codigo)) {
+            mapaProdutos.set(codigo, {
+                codigo_externo: codigo,
+                quantidade: prod.pedido_quantidade || 0
+            });
+        }
+    });
+
+    return Array.from(mapaProdutos.values());
+}
+
+async function atualizarProdutosNaAPI(pedidoId, produtos) {
+    const response = await fetch(`${API_URL}/atualizarquantidade_0`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            pedidos_loja_id: Number(pedidoId),
+            produtos_entregues: produtos.map(p => ({
+                codigo_externo: p.codigo_externo,
+                quantidade_entregue: p.quantidade
+            }))
+        })
+    });
+
+    if (!response.ok) {
+        const erroData = await response.json();
+        throw new Error(erroData.message || 'Erro na atualização');
+    }
+    return response.json();
 }
 
 async function carregarDetalhesPedido(pedidoId) {
@@ -386,30 +404,29 @@ async function carregarDetalhesPedido(pedidoId) {
             fetch(`${API_URL}/pedidos_sku?pedido_loja_id=${pedidoId}`)
         ]);
 
-        if (!respostaPedido.ok || !respostaSkus.ok) {
-            throw new Error('Erro ao carregar detalhes');
-        }
+        // Verificação rigorosa de respostas
+        if (!respostaPedido.ok) throw new Error(`Erro Pedido: ${respostaPedido.status}`);
+        if (!respostaSkus.ok) throw new Error(`Erro SKUs: ${respostaSkus.status}`);
 
         const [pedido, skus] = await Promise.all([
             respostaPedido.json(),
             respostaSkus.json()
         ]);
 
-        if (!pedido?._lojas?.loja_nome) {
-            throw new Error("Dados da loja incompletos");
-        }
+        // Validação de dados essenciais
+        if (!pedido || typeof pedido !== 'object') throw new Error("Dados do pedido inválidos");
+        if (!Array.isArray(skus)) throw new Error("Formato de SKUs inválido");
 
-        currentSkus = skus;
+        currentSkus = skus.filter(sku => sku._produtos?.produto_base_id); // Filtra SKUs válidos
         numeracoes = [...new Set(
-            skus.map(sku => parseInt(sku._produtos.numeracao))
-                .filter(n => n >= 33)
+            currentSkus.map(sku => parseInt(sku._produtos.numeracao))
         )].sort((a, b) => a - b);
 
         exibirDetalhesPedido(pedido);
         atualizarTabelas();
     } catch (erro) {
-        console.error("Erro nos detalhes:", erro);
-        mostrarErro(`Erro: ${erro.message}`);
+        console.error("Erro detalhado:", erro);
+        mostrarErro(`Falha crítica: ${erro.message}`);
     } finally {
         mostrarCarregamento(false);
     }
