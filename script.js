@@ -295,21 +295,33 @@ async function processarXML() {
         if (!pedidoId) throw new Error('Selecione um pedido antes de importar');
         if (!fileInput?.files?.[0]) throw new Error('Selecione um arquivo XML válido');
 
+        // Obter dados do pedido para pegar a razão social
+        const respostaPedido = await fetch(`${API_URL}/pedidos_loja/${pedidoId}`);
+        if (!respostaPedido.ok) throw new Error('Erro ao buscar dados do pedido');
+        const pedidoData = await respostaPedido.json();
+        
+        // Extrair razão social da loja receptora
+        const razaoSocial = pedidoData?._lojas?.loja_razao_social || 'Loja não identificada';
+        
         // 1. Obter produtos existentes do pedido
         const produtosExistentes = await obterProdutosDoPedido(pedidoId);
         
         // 2. Processar XML
-        const produtosXML = await extrairProdutosXML(fileInput.files[0]);
+        const { nfData, produtos: produtosXML } = await extrairProdutosXML(fileInput.files[0]);
         
         // 3. Combinar dados
         const produtosAtualizados = combinarQuantidades(produtosExistentes, produtosXML);
 
         // 4. Enviar para API
-        const resposta = await atualizarProdutosNaAPI(pedidoId, produtosAtualizados);
+        const resposta = await atualizarProdutosNaAPI(pedidoId, produtosAtualizados, nfData);
 
-        // 5. Atualizar UI
+        // 5. Atualizar UI com razão social
         resultado.className = 'upload-status success';
-        resultado.innerHTML = `✅ ${produtosAtualizados.length} produtos processados`;
+        resultado.innerHTML = `
+            ✅ ${produtosAtualizados.length} produtos processados<br>
+            NF: Série ${nfData.serie}, Número ${nfData.numero}<br>
+            Loja receptora: ${razaoSocial}
+        `;
         
         // 6. Recarregar dados
         await carregarDetalhesPedido(pedidoId);
@@ -320,6 +332,8 @@ async function processarXML() {
         elementos.resultadoImportacao.textContent = `❌ Erro: ${erro.message}`;
     }
 }
+
+
 
 // Funções auxiliares
 async function obterProdutosDoPedido(pedidoId) {
@@ -333,13 +347,26 @@ async function extrairProdutosXML(arquivoXML) {
     const xmlDoc = new DOMParser().parseFromString(xmlString, "text/xml");
     const ns = { nfe: 'http://www.portalfiscal.inf.br/nfe' };
 
-    return Array.from(xmlDoc.getElementsByTagNameNS(ns.nfe, 'det')).map(det => {
+    // Extrair dados da NF
+    const ide = xmlDoc.getElementsByTagNameNS(ns.nfe, 'ide')[0];
+    const emit = xmlDoc.getElementsByTagNameNS(ns.nfe, 'emit')[0];
+
+    const nfData = {
+        serie: ide.getElementsByTagNameNS(ns.nfe, 'serie')[0]?.textContent || '',
+        numero: ide.getElementsByTagNameNS(ns.nfe, 'nNF')[0]?.textContent || '',
+        cnpj_emitente: emit.getElementsByTagNameNS(ns.nfe, 'CNPJ')[0]?.textContent || ''
+    };
+
+    // Extrair produtos
+    const produtos = Array.from(xmlDoc.getElementsByTagNameNS(ns.nfe, 'det')).map(det => {
         const prod = det.getElementsByTagNameNS(ns.nfe, 'prod')[0];
         return {
             codigo_externo: prod.getElementsByTagNameNS(ns.nfe, 'cProd')[0].textContent.padStart(5, '0'),
             quantidade: parseFloat(prod.getElementsByTagNameNS(ns.nfe, 'qCom')[0].textContent)
         };
     }).filter(p => p.codigo_externo && !isNaN(p.quantidade));
+
+    return { nfData, produtos };
 }
 
 function combinarQuantidades(existentes, novos) {
@@ -376,7 +403,7 @@ function combinarQuantidades(existentes, novos) {
     return Array.from(mapaProdutos.values());
 }
 
-async function atualizarProdutosNaAPI(pedidoId, produtos) {
+async function atualizarProdutosNaAPI(pedidoId, produtos, nfData) {
     const response = await fetch(`${API_URL}/atualizarquantidade_0`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -385,7 +412,10 @@ async function atualizarProdutosNaAPI(pedidoId, produtos) {
             produtos_entregues: produtos.map(p => ({
                 codigo_externo: p.codigo_externo,
                 quantidade_entregue: p.quantidade
-            }))
+            })),
+            nf_serie: nfData.serie,
+            nf_numero: nfData.numero,
+            nf_loja: nfData.cnpj_emitente
         })
     });
 
