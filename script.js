@@ -332,9 +332,32 @@ async function processarXML() {
         elementos.resultadoImportacao.textContent = `❌ Erro: ${erro.message}`;
     }
 }
-
-
-
+async function buscarEntradasNotas(pedidoId) {
+    try {
+      const url = new URL(`${API_URL}/entrada`);
+      url.searchParams.append('pedido_loja_id', pedidoId);
+  
+      const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  
+      const data = await response.json();
+      console.log('RAW entradas vindas da API:', data);
+  
+      const entries = Array.isArray(data) ? data : (data.data || []);
+      console.log('entries após normalização de array:', entries);
+  
+      // REMOVE filter por pedido_loja_id — the API já fez isso pra você
+      return entries.filter(entry =>
+        entry.nf_serie   || 
+        entry.nf_numero  || 
+        entry.entrada_data
+      );
+    } catch (erro) {
+      console.error('Erro na busca de entradas:', erro);
+      mostrarErro(`Falha ao carregar entradas: ${erro.message}`);
+      return [];
+    }
+  }
 // Funções auxiliares
 async function obterProdutosDoPedido(pedidoId) {
     const response = await fetch(`${API_URL}/pedidos_sku?pedido_loja_id=${pedidoId}`);
@@ -429,56 +452,103 @@ async function atualizarProdutosNaAPI(pedidoId, produtos, nfData) {
 async function carregarDetalhesPedido(pedidoId) {
     mostrarCarregamento(true);
     try {
-        const [respostaPedido, respostaSkus] = await Promise.all([
+        const [pedidoResponse, skusResponse] = await Promise.all([
             fetch(`${API_URL}/pedidos_loja/${pedidoId}`),
             fetch(`${API_URL}/pedidos_sku?pedido_loja_id=${pedidoId}`)
         ]);
 
-        // Verificação rigorosa de respostas
-        if (!respostaPedido.ok) throw new Error(`Erro Pedido: ${respostaPedido.status}`);
-        if (!respostaSkus.ok) throw new Error(`Erro SKUs: ${respostaSkus.status}`);
+        if (!pedidoResponse.ok || !skusResponse.ok) {
+            throw new Error('Erro ao carregar dados do pedido');
+        }
 
-        const [pedido, skus] = await Promise.all([
-            respostaPedido.json(),
-            respostaSkus.json()
-        ]);
+        const pedido = await pedidoResponse.json();
+        const skus = await skusResponse.json();
 
-        // Validação de dados essenciais
-        if (!pedido || typeof pedido !== 'object') throw new Error("Dados do pedido inválidos");
-        if (!Array.isArray(skus)) throw new Error("Formato de SKUs inválido");
-
-        currentSkus = skus.filter(sku => sku._produtos?.produto_base_id); // Filtra SKUs válidos
+        currentSkus = skus.filter(sku => sku._produtos?.produto_base_id);
         numeracoes = [...new Set(
-            currentSkus.map(sku => parseInt(sku._produtos.numeracao))
-        )].sort((a, b) => a - b);
+            currentSkus.map(sku => parseInt(sku._produtos.numeracao)))
+        ].sort((a, b) => a - b);
 
-        exibirDetalhesPedido(pedido);
+        await exibirDetalhesPedido(pedido);
         atualizarTabelas();
+
     } catch (erro) {
-        console.error("Erro detalhado:", erro);
-        mostrarErro(`Falha crítica: ${erro.message}`);
+        console.error("Erro ao carregar detalhes:", erro);
+        mostrarErro(`Falha ao carregar dados: ${erro.message}`);
     } finally {
         mostrarCarregamento(false);
     }
 }
 
-function exibirDetalhesPedido(pedido) {
+async function exibirDetalhesPedido(pedido) {
     const container = document.getElementById('detalhesPedido');
-    container.innerHTML = '';
-    
-    const detalhes = document.createElement('div');
-    detalhes.innerHTML = `
-        <p><strong>ID Pedido:</strong> ${pedido.id}</p>
-        <p><strong>Loja:</strong> ${pedido._lojas.loja_nome}</p>
-        <p><strong>CNPJ:</strong> ${pedido._lojas.loja_cnpj || 'Não informado'}</p>
-        <p><strong>Data do Pedido:</strong> ${new Date(pedido.pedido_data).toLocaleDateString()}</p>
-        <p><strong>Status:</strong> <span class="status-${pedido.status.toLowerCase()}">${pedido.status}</span></p>
-        <p><strong>Última Atualização:</strong> ${new Date(pedido.updated_at).toLocaleString()}</p>
-    `;
-
-    container.appendChild(detalhes);
+    console.log('exibirDetalhesPedido encontrou container?', container);
+    if (!container) {
+      console.error('Container de detalhes não encontrado!');
+      return;
+    }
+    try {
+        const entradas = await buscarEntradasNotas(pedido.id);
+  console.log('Entradas retornadas de API:', entradas);
+  const html = `
+    <div class="pedido-info">
+      <h2>${pedido.pedido_nome}</h2>
+      <p>ID: ${pedido.id}</p>
+      <p>Status: <span class="status">${pedido.status}</span></p>
+    </div>
+    ${gerarTabelaEntradas(entradas)}
+  `;
+  console.log('HTML gerado para detalhes:', html);
+  container.innerHTML = html;
+} catch (erro) {
+        console.error('Erro ao exibir detalhes:', erro);
+        container.innerHTML = `<div class="error">Erro ao carregar detalhes: ${erro.message}</div>`;
+    }
 }
 
+
+function gerarTabelaEntradas(entradas) {
+    console.log('gerarTabelaEntradas recebeu:', entradas);
+    if (!entradas?.length) {
+      console.log('Nenhuma entrada para mostrar');
+      return '<div class="sem-entradas">Nenhuma entrada registrada</div>';
+    }
+
+    // Converter datas corretamente
+    const formatarData = (dataString) => {
+        try {
+            return new Date(dataString).toLocaleDateString('pt-BR');
+        } catch {
+            return 'Data inválida';
+        }
+    };
+
+    return `
+        <div class="entradas-section">
+            <h3>Histórico de Entradas (${entradas.length})</h3>
+            <table class="entradas-table">
+                <thead>
+                    <tr>
+                        <th>Série</th>
+                        <th>Número</th>
+                        <th>Fornecedor</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${entradas.map(entrada => `
+                        <tr>
+                            <td>${entrada.nf_serie || '-'}</td>
+                            <td>${entrada.nf_numero || '-'}</td>
+                            <td>${formatarCNPJ(entrada.nf_loja) || '-'}</td>
+                            <td>${formatarData(entrada.entrada_data)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
 function exibirListaPedidos(pedidos) {
     const container = document.getElementById('listaPedidos');
     if (!container) {
@@ -581,13 +651,5 @@ lojaSelects.forEach(select => {
     });
 });
 
-
-
-// Adicione no final do código:
-document.addEventListener('DOMContentLoaded', () => {
-    if (elementos.seletorLoja.value) {
-        elementos.seletorLoja.dispatchEvent(new Event('change'));
-    }
-});
 
 
